@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-User Task Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #c4c4c4; font-style: italic;}
+        .container { margin-top: 50px; }
+        .card { border-radius: 15px; border: none; box-shadow: 0 10px 20px rgba(190, 8, 8, 0.1); }
+        .list-group-item { border: none; background-color: #c0d1ff; border-radius: 10px; margin-bottom: 10px; }
+        
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div id="auth-section" class="card p-4">
+                    <h1 class="text-center mb-4">Welcome Task Manager!</h1>
+                    <ul class="nav nav-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-bs-toggle="tab" href="#login-tab">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#signup-tab">Sign Up</a>
+                        </li>
+                    </ul>
+                    <div class="tab-content mt-3">
+                        <div class="tab-pane fade show active" id="login-tab">
+                            <form id="login-form">
+                                <div class="mb-3">
+                                    <label for="login-username" class="form-label">Username</label>
+                                    <input type="text" class="form-control" id="login-username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="login-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="login-password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Login</button>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="signup-tab">
+                            <form id="signup-form">
+                                <div class="mb-3">
+                                    <label for="signup-username" class="form-label">Username</label>
+                                    <input type="text" class="form-control" id="signup-username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="signup-password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="signup-password" required>
+                                </div>
+                                <button type="submit" class="btn btn-success w-100">Sign Up</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div id="todo-section" class="card p-4" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h1 class="m-0">Task List</h1>
+                        <button class="btn btn-danger" onclick="logout()">Logout</button>
+                    </div>
+                    <div class="input-group mb-4">
+                        <input type="text" id="new-todo-item" class="form-control" placeholder="What needs to be done?">
+                        <button class="btn btn-primary" onclick="addTodo()">Add To-Do</button>
+                    </div>
+
+                    <ul id="todo-list" class="list-group">
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+
+        const authSection = document.getElementById('auth-section');
+        const todoSection = document.getElementById('todo-section');
+        const todoList = document.getElementById('todo-list');
+        window.onload = function() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                showTodoSection();
+                fetchTodos();
+            }
+        };
+        async function login(username, password) {
+            try {
+                const formData = new FormData();
+                formData.append('username', username);
+                formData.append('password', password);
+                
+                const response = await fetch(`${API_URL}/token`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) throw new Error('Login failed');
+                
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token);
+                showTodoSection();
+                fetchTodos();
+            } catch (error) {
+                alert('Invalid username or password.');
+            }
+        }
+        
+        async function signup(username, password) {
+            try {
+                const response = await fetch(`${API_URL}/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password })
+                });
+                if (!response.ok) throw new Error('Signup failed');
+                
+                alert('Signup successful! Please log in.');
+                const loginTab = new bootstrap.Tab(document.querySelector('a[href="#login-tab"]'));
+                loginTab.show();
+            } catch (error) {
+                alert('Signup failed. Username might be taken.');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            showAuthSection();
+        }
+
+        function showTodoSection() {
+            authSection.style.display = 'none';
+            todoSection.style.display = 'block';
+        }
+        
+        function showAuthSection() {
+            authSection.style.display = 'block';
+            todoSection.style.display = 'none';
+            todoList.innerHTML = '';
+        }
+        
+        async function fetchTodos() {
+            const token = localStorage.getItem('access_token');
+            try {
+                const response = await fetch(`${API_URL}/todos/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const todos = await response.json();
+                todoList.innerHTML = '';
+                todos.forEach(todo => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    listItem.innerHTML = `
+                        <span>${todo.item}</span>
+                        <div>
+                            <button class="btn btn-sm btn-warning me-2" onclick="promptUpdate(${todo.id})">Update</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteTodo(${todo.id})">Delete</button>
+                        </div>
+                    `;
+                    todoList.appendChild(listItem);
+                });
+            } catch (error) {
+                console.error('Error fetching todos:', error);
+            }
+        }
+
+        async function addTodo() {
+            const token = localStorage.getItem('access_token');
+            const itemInput = document.getElementById('new-todo-item');
+            const itemText = itemInput.value.trim();
+            if (!itemText) return;
+
+            try {
+                await fetch(`${API_URL}/todos/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` // IMPORTANT: Send the token
+                    },
+                    body: JSON.stringify({ item: itemText })
+                });
+                itemInput.value = '';
+                fetchTodos();
+            } catch (error) {
+                console.error('Error adding todo:', error);
+            }
+        }
+
+        async function deleteTodo(id) {
+            const token = localStorage.getItem('access_token');
+            try {
+                await fetch(`${API_URL}/todos/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` } // IMPORTANT: Send the token
+                });
+                fetchTodos();
+            } catch (error) {
+                console.error('Error deleting todo:', error);
+            }
+        }
+        
+        async function promptUpdate(id) {
+            const token = localStorage.getItem('access_token');
+            const newItem = prompt("Enter the new text for this to-do:");
+            if (newItem) {
+                try {
+                    await fetch(`${API_URL}/todos/${id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}` 
+                        },
+                        body: JSON.stringify({ item: newItem })
+                    });
+                    fetchTodos();
+                } catch (error) {
+                    console.error('Error updating todo:', error);
+                }
+            }
+        }
+
+
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            login(username, password);
+        });
+
+        document.getElementById('signup-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = document.getElementById('signup-username').value;
+            const password = document.getElementById('signup-password').value;
+            signup(username, password);
+        });
+
+    </script>
+</body>
+</html>
